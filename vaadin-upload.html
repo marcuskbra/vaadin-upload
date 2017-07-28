@@ -44,6 +44,7 @@ Custom property | Description | Default
 <link rel="import" href="vaadin-upload-icons.html">
 
 <link rel="import" href="vaadin-upload-file.html">
+<script type="text/javascript" src="./lib/PromiseQueue.es5.js"></script>
 
 <dom-module id="vaadin-upload">
   <template>
@@ -267,6 +268,15 @@ Custom property | Description | Default
         value: function() {
           return [];
         }
+      },
+
+      /**
+       * Promise Queue to chain requests
+       */
+      queue: {
+        type: Object,
+        value: new PromiseQueue({ concurrency: 1 }),
+        notify: true
       },
 
       /**
@@ -592,104 +602,115 @@ Custom property | Description | Default
     },
 
     _uploadFile: function(file) {
-      if (file.uploading) {
-        return;
-      }
+      // Return a new promise.
+      return new Promise(function(resolve, reject) {
 
-      var ini = Date.now();
-      var xhr = file.xhr = this._createXhr(file);
-
-      var stalledId, last;
-      // onprogress is called always after onreadystatechange
-      xhr.upload.onprogress = function(e) {
-        clearTimeout(stalledId);
-
-        last = Date.now();
-        var elapsed = (last - ini) / 1000;
-        var loaded = e.loaded, total = e.total, progress = ~~(loaded / total * 100);
-
-        file.loaded = loaded;
-        file.progress = progress;
-        file.indeterminate = loaded <= 0 || loaded >= total, true;
-        if (file.error) {
-          file.indeterminate = file.status = undefined;
-        } else if (!file.abort) {
-          if (progress < 100) {
-            this._setStatus(file, total, loaded, elapsed, progress);
-            stalledId = setTimeout(function() {
-              file.status = this.i18n.uploading.status.stalled;
-              this._notifyFileChanges(file);
-            }.bind(this), 2000);
-          } else {
-            file.loadedStr = file.totalStr;
-            file.status = this.i18n.uploading.status.processing;
-            file.uploading = false;
-          }
+        if (file.uploading) {
+          return;
         }
 
-        this._notifyFileChanges(file);
-        this.fire('upload-progress', {file: file, xhr: xhr});
-      }.bind(this);
+        var ini = Date.now();
+        var xhr = file.xhr = this._createXhr(file);
 
-      // More reliable than xhr.onload
-      xhr.onreadystatechange = function() {
-        if (xhr.readyState == 4) {
+        var stalledId, last;
+        // onprogress is called always after onreadystatechange
+        xhr.upload.onprogress = function(e) {
           clearTimeout(stalledId);
-          file.indeterminate = file.uploading = false;
-          if (file.abort) {
-            this._notifyFileChanges(file);
-            return;
-          }
-          file.status = '';
-          // Custom listener can modify the default behavior either
-          // preventing default, changing the xhr, or setting the file error
-          var evt = this.fire('upload-response', {file: file, xhr: xhr}, {cancelable: true});
-          if (evt.defaultPrevented) {
-            return;
-          }
-          if (xhr.status === 0) {
-            file.error = this.i18n.uploading.error.serverUnavailable;
-          } else if (xhr.status >= 500) {
-            file.error = this.i18n.uploading.error.unexpectedServerError;
-          } else if (xhr.status >= 400) {
-            file.error = this.i18n.uploading.error.forbidden;
+
+          last = Date.now();
+          var elapsed = (last - ini) / 1000;
+          var loaded = e.loaded, total = e.total, progress = ~~(loaded / total * 100);
+
+          file.loaded = loaded;
+          file.progress = progress;
+          file.indeterminate = loaded <= 0 || loaded >= total, true;
+          if (file.error) {
+            file.indeterminate = file.status = undefined;
+          } else if (!file.abort) {
+            if (progress < 100) {
+              this._setStatus(file, total, loaded, elapsed, progress);
+              stalledId = setTimeout(function() {
+                file.status = this.i18n.uploading.status.stalled;
+                this._notifyFileChanges(file);
+              }.bind(this), 2000);
+            } else {
+              file.loadedStr = file.totalStr;
+              file.status = this.i18n.uploading.status.processing;
+              file.uploading = false;
+            }
           }
 
-          file.complete = !file.error;
-          this.fire('upload-' + (file.error ? 'error' : 'success'), {file: file, xhr: xhr});
           this._notifyFileChanges(file);
+          this.fire('upload-progress', {file: file, xhr: xhr});
+        }.bind(this);
+
+        // More reliable than xhr.onload
+        xhr.onreadystatechange = function() {
+          if (xhr.readyState == 4) {
+            clearTimeout(stalledId);
+            file.indeterminate = file.uploading = false;
+            if (file.abort) {
+              this._notifyFileChanges(file);
+              return;
+            }
+            file.status = '';
+            // Custom listener can modify the default behavior either
+            // preventing default, changing the xhr, or setting the file error
+            var evt = this.fire('upload-response', {file: file, xhr: xhr}, {cancelable: true});
+            if (evt.defaultPrevented) {
+              return;
+            }
+            if (xhr.status === 0) {
+              file.error = this.i18n.uploading.error.serverUnavailable;
+            } else if (xhr.status >= 500) {
+              file.error = this.i18n.uploading.error.unexpectedServerError;
+            } else if (xhr.status >= 400) {
+              file.error = this.i18n.uploading.error.forbidden;
+            }
+
+            file.complete = !file.error;
+            var resultObj = {file: file, xhr: xhr};
+            if (file.error) {
+              this.fire('upload-error', resultObj);
+              reject(resultObj);
+            } else {
+              this.fire('upload-success', resultObj);
+              resolve(resultObj);
+            }
+            this._notifyFileChanges(file);
+          }
+        }.bind(this);
+
+        var formData = new FormData();
+
+        file.uploadTarget = this.target || '';
+        file.formDataName = this.formDataName;
+        var evt = this.fire('upload-before', {file: file, xhr: xhr}, {cancelable: true});
+        if (evt.defaultPrevented) {
+          return;
         }
-      }.bind(this);
 
-      var formData = new FormData();
+        formData.append(file.formDataName, file, file.name);
 
-      file.uploadTarget = this.target || '';
-      file.formDataName = this.formDataName;
-      var evt = this.fire('upload-before', {file: file, xhr: xhr}, {cancelable: true});
-      if (evt.defaultPrevented) {
-        return;
-      }
+        xhr.open(this.method, file.uploadTarget, true);
+        this._configureXhr(xhr);
 
-      formData.append(file.formDataName, file, file.name);
+        file.status = this.i18n.uploading.status.connecting;
+        file.uploading = file.indeterminate = true;
+        file.complete = file.abort = file.error = false;
 
-      xhr.open(this.method, file.uploadTarget, true);
-      this._configureXhr(xhr);
+        xhr.upload.onloadstart = function() {
+          this.fire('upload-start', {file: file, xhr: xhr});
+          this._notifyFileChanges(file);
+        }.bind(this);
 
-      file.status = this.i18n.uploading.status.connecting;
-      file.uploading = file.indeterminate = true;
-      file.complete = file.abort = file.error = false;
-
-      xhr.upload.onloadstart = function() {
-        this.fire('upload-start', {file: file, xhr: xhr});
-        this._notifyFileChanges(file);
-      }.bind(this);
-
-      // Custom listener could modify the xhr just before sending it
-      // preventing default
-      evt = this.fire('upload-request', {file: file, xhr: xhr, formData: formData}, {cancelable: true});
-      if (!evt.defaultPrevented) {
-        xhr.send(formData);
-      }
+        // Custom listener could modify the xhr just before sending it
+        // preventing default
+        evt = this.fire('upload-request', {file: file, xhr: xhr, formData: formData}, {cancelable: true});
+        if (!evt.defaultPrevented) {
+          xhr.send(formData);
+        }
+      }.bind(this));
     },
 
     _retryFileUpload: function(file) {
@@ -744,8 +765,8 @@ Custom property | Description | Default
         return;
       }
       file.loaded = 0;
-      this.unshift('files', file);
-      this._uploadFile(file);
+      this.push('files', file);
+      this.queue.add(function(){return this._uploadFile(file)}.bind(this));
     },
 
     /**

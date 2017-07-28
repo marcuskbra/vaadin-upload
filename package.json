@@ -1,9 +1,9 @@
 {
-  "name": "vaadin-upload",
-  "version": "1.1.4",
-  "description": "Polymer Element for uploading files",
+  "name": "vaadin-upload-extended",
+  "version": "1.1.5",
+  "description": "Polymer Element for uploading files using queue",
   "main": "vaadin-upload.html",
-  "repository": "vaadin/vaadin-upload",
+  "repository": "marcuskbra/vaadin-upload",
   "keywords": [
     "Vaadin",
     "upload",
@@ -14,7 +14,7 @@
   "author": "Vaadin Ltd",
   "license": "Apache-2.0",
   "bugs": {
-    "url": "https://github.com/vaadin/vaadin-upload/issues"
+    "url": "https://github.com/marcuskbra/vaadin-upload/issues"
   },
   "homepage": "https://vaadin.com/elements",
   "scripts": {

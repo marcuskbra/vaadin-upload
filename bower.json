@@ -1,10 +1,10 @@
 {
-  "name": "vaadin-upload",
+  "name": "vaadin-upload-extended",
   "homepage": "https://vaadin.com/elements",
   "authors": [
     "Vaadin Ltd"
   ],
-  "description": "Polymer Element for uploading files",
+  "description": "Polymer Element for uploading files using queue",
   "main": "vaadin-upload.html",
   "moduleType": [
     "globals"
