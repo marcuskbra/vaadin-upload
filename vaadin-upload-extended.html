@@ -195,6 +195,12 @@ Custom property | Description | Default
         },
       },
 
+      alphabeticalOrder: {
+        type: Boolean,
+        value: false,
+        notify: true
+      },
+
       /**
        * The server URL. The default value is an empty string, which means that
        * _window.location_ will be used.
@@ -741,7 +747,14 @@ Custom property | Description | Default
     },
 
     _addFiles: function(files) {
-      Array.prototype.forEach.call(files, this._addFile.bind(this));
+      var filesArray = Array.from(files);
+      if (this.alphabeticalOrder) {
+        debugger;
+        filesArray.sort(function(a, b) {
+          return a.name.localeCompare(b.name);
+        });
+      }
+      Array.prototype.forEach.call(filesArray, this._addFile.bind(this));
     },
 
     /**

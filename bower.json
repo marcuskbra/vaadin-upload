@@ -5,7 +5,7 @@
     "Vaadin Ltd"
   ],
   "description": "Polymer Element for uploading files using queue",
-  "main": "vaadin-upload.html",
+  "main": "vaadin-upload-extended.html",
   "moduleType": [
     "globals"
   ],
