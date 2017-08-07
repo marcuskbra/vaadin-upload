@@ -749,7 +749,6 @@ Custom property | Description | Default
     _addFiles: function(files) {
       var filesArray = Array.from(files);
       if (this.alphabeticalOrder) {
-        debugger;
         filesArray.sort(function(a, b) {
           return a.name.localeCompare(b.name);
         });
